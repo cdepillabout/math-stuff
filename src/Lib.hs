@@ -99,15 +99,26 @@ dotProdMat mat1 mat2
       goCol :: [a] -> a
       goCol colOfMat2 = dotProdVec rowOfMat1 colOfMat2
 
+-- | Perform an operation on two matricies.
+opMat :: forall a b c. (a -> b -> c) -> [[a]] -> [[b]] -> [[c]]
+opMat f mat1 mat2 =
+  let xs :: [([a], [b])] = zip mat1 mat2
+      ys :: [[(a,b)]] = fmap (uncurry zip) xs
+  in ffmap (uncurry f) ys
+
+-- | Add one matrix to another.
+--
+-- >>> addMat [[1,2,3],[4,5,6]] [[7,10,20],[1,3,10]]
+-- [[8,12,23],[5,8,16]]
+addMat :: forall a. Num a => [[a]] -> [[a]] -> [[a]]
+addMat = opMat (+)
+
 -- | Subtract one matrix from another.
 --
 -- >>> subtractMat [[1,2,3],[4,5,6]] [[7,10,20],[1,3,10]]
 -- [[-6,-8,-17],[3,2,-4]]
 subtractMat :: forall a. Num a => [[a]] -> [[a]] -> [[a]]
-subtractMat mat1 mat2 =
-  let xs :: [([a], [a])] = zip mat1 mat2
-      ys :: [[(a,a)]] = fmap (uncurry zip) xs
-  in ffmap (uncurry (-)) ys
+subtractMat = opMat (-)
 
 -- | Transpose a matrix.
 --
@@ -122,6 +133,9 @@ subtractMat mat1 mat2 =
 --
 -- >>> transpose [[1],[2],[3]]
 -- [[1,2,3]]
+--
+-- >>> transpose [[1,2],[5,4]]
+-- [[1,5],[2,4]]
 transpose :: [[a]] -> [[a]]
 transpose = foldl' go []
   where
@@ -203,13 +217,25 @@ matDiv mat a = ffmap (/ a) mat
 
 -- | Calculate a covariance matrix.
 --
--- >>> calcCovarMatrix [[1,2,3],[4,5,6],[7,8,9],[10,11,12]]
+-- >>> calcCovarMatrixMeth1 [[1,2,3],[4,5,6],[7,8,9],[10,11,12]]
 -- [[11.25,11.25,11.25],[11.25,11.25,11.25],[11.25,11.25,11.25]]
 --
--- >>> calcCovarMatrix [[90,60,90],[90,90,30],[60,60,60],[60,60,90],[30,30,30]]
+-- >>> calcCovarMatrixMeth1 [[90,60,90],[90,90,30],[60,60,60],[60,60,90],[30,30,30]]
 -- [[504.0,360.0,180.0],[360.0,360.0,0.0],[180.0,0.0,720.0]]
-calcCovarMatrix :: Fractional a => [[a]] -> [[a]]
-calcCovarMatrix mat =
+--
+-- >>> calcCovarMatrixMeth1 [[1,2],[5,4]]
+-- [[4.0,2.0],[2.0,1.0]]
+--
+-- >>> calcCovarMatrixMeth1 [[2,4],[10,8]]
+-- [[16.0,8.0],[8.0,4.0]]
+--
+-- >>> calcCovarMatrixMeth1 [[1,2],[7,4]]
+-- [[9.0,3.0],[3.0,1.0]]
+--
+-- >>> calcCovarMatrixMeth1 [[3,4],[9,6]]
+-- [[9.0,3.0],[3.0,1.0]]
+calcCovarMatrixMeth1 :: Fractional a => [[a]] -> [[a]]
+calcCovarMatrixMeth1 mat =
   let mu = calcMatrixMu mat
       mu' = transpose mu
       mat' = transpose mat
@@ -218,3 +244,22 @@ calcCovarMatrix mat =
       res = dotProdMat dMat' dMat
       n = numSamples mat
   in matDiv res n
+
+-- >>> calcCovarMatrixMeth2 [[1,2,3],[4,5,6],[7,8,9],[10,11,12]]
+-- [[11.25,11.25,11.25],[11.25,11.25,11.25],[11.25,11.25,11.25]]
+--
+-- >>> calcCovarMatrixMeth2 [[90,60,90],[90,90,30],[60,60,60],[60,60,90],[30,30,30]]
+-- [[504.0,360.0,180.0],[360.0,360.0,0.0],[180.0,0.0,720.0]]
+calcCovarMatrixMeth2 :: forall a. Fractional a => [[a]] -> [[a]]
+calcCovarMatrixMeth2 mat =
+  let mu = calcColAvgs mat
+      allMatricies = fmap (go mu) mat
+      res = foldl1 addMat allMatricies
+      n = numSamples mat
+  in matDiv res n
+  where
+    go :: [a] -> [a] -> [[a]]
+    go mu row =
+      let mat1 = [zipWith (-) row mu]
+          mat2 = transpose mat1
+      in dotProdMat mat1 mat2
